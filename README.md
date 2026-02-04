@@ -55,11 +55,14 @@ This version expects headerless, space-separated rows.
 Format:
 SYMBOL EXPIRY STRIKE CE|PE QTY PRICE
 
-Example:
+### Example
+
+```
 ITC 24-Feb-26 263.5 PE -19200 0.7
 ITC 24-Feb-26 273.5 PE  6400  1.1
 ITC 24-Feb-26 343.5 CE  6400  1.45
 ITC 24-Feb-26 353.5 CE -19200 0.8
+```
 
 - Quantity is signed:
   - Negative = sell
@@ -152,6 +155,7 @@ You do not need to re-login on every refresh unless the token expires.
 
 ## Project structure
 
+```
 strategy-builder/
 ├── core/
 │   ├── positions.py        # Input parsing (options only)
@@ -168,6 +172,8 @@ strategy-builder/
 ├── run.py                  # App entry point
 ├── requirements.txt
 └── README.md
+```
+
 
 ---
 
