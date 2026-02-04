@@ -192,9 +192,3 @@ Designed for live trading analysis and gradual extension.
 - Historical POP validation
 
 ---
-
-## Disclaimer
-
-This tool is for analysis and education only.
-Trading involves risk.
-All outputs are model-based and not financial advice.
