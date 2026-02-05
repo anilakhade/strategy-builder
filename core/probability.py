@@ -4,15 +4,13 @@ from typing import List, Tuple
 
 
 def _norm_cdf(x: float) -> float:
-    """
-    Standard normal CDF using error function.
-    """
     return 0.5 * (1.0 + erf(x / sqrt(2.0)))
 
 
 class ProbabilityEngine:
     """
-    Computes Probability of Profit (PoP) using a lognormal model.
+    Computes Probability of Profit (PoP) at expiry
+    using exact payoff integration under lognormal model.
     """
 
     def __init__(
@@ -22,70 +20,85 @@ class ProbabilityEngine:
         expiry: date,
         today: date | None = None,
     ):
-        """
-        spot       : current spot price
-        volatility : annualized volatility (e.g. 0.18 for 18%)
-        expiry     : option expiry date
-        today      : defaults to today()
-        """
         self.spot = float(spot)
         self.vol = float(volatility)
         self.expiry = expiry
         self.today = today or date.today()
 
         self.T = self._time_to_expiry()
-
         if self.T <= 0:
             raise ValueError("Expiry must be in the future")
 
     # -------------------------------------------------
 
-    def probability_of_profit(self, breakevens: List[float]) -> float:
+    def probability_of_profit(self, legs: List[dict]) -> float:
         """
-        Returns probability (0–1) that final price lies in profit region.
+        legs: [{strike, opt, qty, price}]
+        Returns probability in [0, 1]
         """
-        if not breakevens:
-            # No breakeven → always profit or always loss
-            # Caller should interpret this case
-            return 0.0
 
-        breakevens = sorted(breakevens)
+        # 1. Collect all critical points
+        strikes = sorted({l["strike"] for l in legs})
+        points = [0.0] + strikes + [1e12]
 
-        if len(breakevens) == 1:
-            be = breakevens[0]
+        profit_intervals: List[Tuple[float, float]] = []
 
-            # Profit above or below BE depends on payoff slope
-            # Convention: assume profit ABOVE breakeven
-            return 1.0 - self._cdf_price(be)
+        # 2. Check each interval midpoint
+        for i in range(len(points) - 1):
+            lo, hi = points[i], points[i + 1]
 
-        if len(breakevens) == 2:
-            be1, be2 = breakevens
-            return self._cdf_price(be2) - self._cdf_price(be1)
+            if hi - lo < 1e-9:
+                continue
 
-        raise ValueError("More than 2 breakevens not supported")
+            S = (lo + hi) / 2.0
+            pnl = self._payoff(S, legs)
+
+            if pnl >= 0:
+                profit_intervals.append((lo, hi))
+
+        # 3. Integrate probability over profit intervals
+        prob = 0.0
+        for lo, hi in profit_intervals:
+            prob += self._cdf_price(hi) - self._cdf_price(lo)
+
+        return max(0.0, min(1.0, prob))
 
     # -------------------------------------------------
-    # Internal helpers
+    # Payoff
+    # -------------------------------------------------
+
+    @staticmethod
+    def _payoff(S: float, legs: List[dict]) -> float:
+        total = 0.0
+
+        for l in legs:
+            k = l["strike"]
+            q = l["qty"]
+            p = l["price"]
+
+            if l["opt"] == "CE":
+                intrinsic = max(S - k, 0.0)
+            else:
+                intrinsic = max(k - S, 0.0)
+
+            total += q * (intrinsic - p)
+
+        return total
+
+    # -------------------------------------------------
+    # Distribution
     # -------------------------------------------------
 
     def _time_to_expiry(self) -> float:
-        """
-        Time to expiry in years.
-        """
-        days = (self.expiry - self.today).days
-        return days / 365.0
+        return (self.expiry - self.today).days / 365.0
 
     def _cdf_price(self, price: float) -> float:
-        """
-        CDF of lognormal price distribution at given price.
-        """
+        if price <= 0:
+            return 0.0
         z = self._z_score(price)
         return _norm_cdf(z)
 
     def _z_score(self, price: float) -> float:
-        """
-        Converts price level to Z-score under lognormal model.
-        """
         return (
             log(price / self.spot)
             + 0.5 * self.vol * self.vol * self.T

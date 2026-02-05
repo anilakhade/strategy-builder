@@ -5,6 +5,7 @@ from core.breakeven import BreakevenCalculator
 from core.margin import MarginEngine
 from core.session import ZerodhaSession
 from core.utils import format_money
+from core.probability_service import ProbabilityService
 
 
 def run_app():
@@ -47,7 +48,7 @@ def run_app():
     raw_positions = st.text_area(
         "",
         height=220,
-        placeholder="Paste positions here (FUT / CE / PE supported)",
+        placeholder="Paste positions here (CE / PE supported)",
     )
 
     vol = st.number_input(
@@ -63,16 +64,18 @@ def run_app():
             # ---------------- Parse positions ----------------
             book = PositionBook(raw_positions)
             rows = book.rows()
-
-            # 🔒 SANITY CHECK (temporary, safe)
-            if not isinstance(rows, list):
-                raise RuntimeError("PositionBook.rows() did not return list")
-
             total_value = book.total_value()
 
             # ---------------- Breakeven ----------------
             be_calc = BreakevenCalculator(rows)
             breakevens = be_calc.breakevens()
+
+            # ---------------- Probability of Profit ----------------
+            prob_service = ProbabilityService(session.client())
+            pop = prob_service.probability_of_profit(
+                rows=rows,
+                volatility=vol / 100.0,
+            )
 
             # ---------------- Margin ----------------
             engine = MarginEngine(session.client())
@@ -81,7 +84,7 @@ def run_app():
             # ---------------- Summary ----------------
             st.subheader("Summary")
 
-            c1, c2, c3, c4 = st.columns(4)
+            c1, c2, c3, c4, c5 = st.columns(5)
 
             c1.markdown("**Total Value**")
             c1.markdown(format_money(total_value))
@@ -92,21 +95,25 @@ def run_app():
             else:
                 c2.markdown("—")
 
-            c3.markdown("**Final Margin**")
-            c3.markdown(format_money(margin["final"]["total"]))
+            # 🔥 NEW: Probability of Profit (exactly below Breakeven)
+            c3.markdown("**Probability of Profit**")
+            c3.markdown(f"{pop:.2f}%")
 
-            c4.markdown("**Initial Margin**")
-            c4.markdown(format_money(margin["initial"]["total"]))
+            c4.markdown("**Final Margin**")
+            c4.markdown(format_money(margin["final"]["total"]))
+
+            c5.markdown("**Initial Margin**")
+            c5.markdown(format_money(margin["initial"]["total"]))
 
             st.markdown("---")
 
-            c5, c6 = st.columns(2)
+            c6, c7 = st.columns(2)
 
-            c5.markdown("**SPAN**")
-            c5.markdown(format_money(margin["initial"]["span"]))
+            c6.markdown("**SPAN**")
+            c6.markdown(format_money(margin["initial"]["span"]))
 
-            c6.markdown("**Exposure**")
-            c6.markdown(format_money(margin["initial"]["exposure"]))
+            c7.markdown("**Exposure**")
+            c7.markdown(format_money(margin["initial"]["exposure"]))
 
             # ---------------- Positions table ----------------
             with st.expander("Show Position Book", expanded=False):
@@ -114,6 +121,7 @@ def run_app():
 
         except Exception as e:
             st.error(str(e))
+
 
 if __name__ == "__main__":
     run_app()
