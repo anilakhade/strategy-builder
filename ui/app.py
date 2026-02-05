@@ -114,3 +114,6 @@ def run_app():
 
         except Exception as e:
             st.error(str(e))
+
+if __name__ == "__main__":
+    run_app()

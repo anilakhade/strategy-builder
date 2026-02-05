@@ -1,5 +1,16 @@
+# virtual env / build artifacts
 .venv/
 __pycache__/
 *.pyc
+
+# packaging artifacts
+*.egg-info/
+dist/
+build/
+
+# runtime secrets
+token.json
 .env
-.streamlit/
+
+# accidental folders
+strategy-builder/

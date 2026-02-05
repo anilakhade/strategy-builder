@@ -4,10 +4,6 @@ import subprocess
 
 
 def launch():
-    """
-    Launch the Streamlit app from anywhere using:
-    launch-margin
-    """
     root_dir = os.path.dirname(os.path.abspath(__file__))
     app_path = os.path.join(root_dir, "ui", "app.py")
 
@@ -19,8 +15,10 @@ def launch():
         app_path,
     ]
 
-    subprocess.run(cmd)
-
-
-if __name__ == "__main__":
-    launch()
+    # Windows-only: detach process so it survives terminal close
+    subprocess.Popen(
+        cmd,
+        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )

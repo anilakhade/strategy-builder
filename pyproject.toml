@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "strategy-builder"
+version = "0.1.0"
+description = "Options strategy builder with margin, breakeven, and probability"
+requires-python = ">=3.9"
+dependencies = [
+    "streamlit",
+    "kiteconnect",
+    "python-dotenv",
+]
+
+[tool.setuptools]
+packages = ["core", "ui"]
+py-modules = ["cli"]
+
+[project.scripts]
+launch-margin = "cli:launch"
