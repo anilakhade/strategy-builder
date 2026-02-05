@@ -1,5 +1,6 @@
 from typing import List, Dict
 import re
+from datetime import datetime
 
 
 class PositionBook:
@@ -10,9 +11,12 @@ class PositionBook:
 
     SYMBOL EXPIRY STRIKE CE|PE QTY PRICE
 
+    EXPIRY must be in format: dd-MMM-yyyy (case-insensitive month)
     Example:
-    ITC 24-Feb-26 263.5 PE -19200 0.7
+    ITC 24-Feb-2026 263.5 PE -19200 0.7
     """
+
+    _EXPIRY_REGEX = re.compile(r"^\d{2}-[A-Za-z]{3}-\d{4}$")
 
     def __init__(self, raw_text: str):
         self._rows: List[Dict] = []
@@ -39,7 +43,21 @@ class PositionBook:
 
             try:
                 symbol = parts[0]
-                expiry = parts[1]
+                expiry_raw = parts[1]
+
+                if not self._EXPIRY_REGEX.match(expiry_raw):
+                    raise ValueError(
+                        "Invalid expiry format. Use dd-MMM-yyyy (example: 24-Feb-2026)"
+                    )
+
+                # Validate calendar correctness
+                try:
+                    expiry = datetime.strptime(expiry_raw, "%d-%b-%Y").date()
+                except Exception:
+                    raise ValueError(
+                        f"Invalid expiry date: {expiry_raw}"
+                    )
+
                 strike = float(parts[2])
                 opt = parts[3].upper()
 
@@ -51,7 +69,7 @@ class PositionBook:
 
                 self._rows.append({
                     "SYMBOL": symbol,
-                    "EXPIRY": expiry,
+                    "EXPIRY": expiry,   # NOTE: stored as date object
                     "STRIKE": strike,
                     "OPT": opt,
                     "T QTY": qty,
@@ -59,5 +77,5 @@ class PositionBook:
                     "VALUE": -qty * price,
                 })
 
-            except Exception:
-                raise ValueError(f"Invalid row: {line}")
+            except Exception as e:
+                raise ValueError(f"Invalid row: {line}\n{str(e)}")

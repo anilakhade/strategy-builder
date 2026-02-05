@@ -1,15 +1,16 @@
 from typing import List, Dict
-from datetime import datetime, date
+from datetime import date
 from kiteconnect import KiteConnect
 
 
 class MarginEngine:
     """
-    Zerodha margin engine with deterministic instrument resolution.
+    Zerodha margin engine with strict expiry validation.
 
-    Handles:
-    - NSE equity options (decimal strikes supported)
-    - MCX options
+    Rules:
+    - Expiry must exactly match an exchange-listed expiry date
+    - No month guessing
+    - No fallback resolution
     """
 
     _instrument_cache = None
@@ -57,95 +58,43 @@ class MarginEngine:
         symbol = row["SYMBOL"].upper()
         strike = float(row["STRIKE"])
         opt = row["OPT"].upper()
-        expiry = self._parse_expiry(row["EXPIRY"])
+        expiry: date = row["EXPIRY"]
 
-        # NSE equity option
-        inst = self._resolve_nse_equity_option(symbol, expiry, strike, opt)
-        if inst:
-            return inst
+        candidates = []
 
-        # MCX option
-        inst = self._resolve_mcx_option(symbol, expiry, strike, opt)
-        if inst:
-            return inst
+        for inst in self.instruments:
+            if inst.get("strike") != strike:
+                continue
+            if inst.get("instrument_type") != opt:
+                continue
+            if inst.get("name") != symbol:
+                continue
+            if inst.get("expiry") != expiry:
+                continue
 
-        raise ValueError(
-            f"No contract found for {symbol} {expiry} {strike} {opt}"
+            candidates.append(inst)
+
+        if len(candidates) == 1:
+            return candidates[0]
+
+        if not candidates:
+            valid_expiries = sorted({
+                inst["expiry"]
+                for inst in self.instruments
+                if inst.get("name") == symbol
+            })
+
+            if valid_expiries:
+                exp_str = ", ".join(d.strftime("%d-%b-%Y") for d in valid_expiries)
+                raise ValueError(
+                    f"No contract found for {symbol} {expiry.strftime('%d-%b-%Y')}.\n"
+                    f"Valid expiries are: {exp_str}"
+                )
+
+            raise ValueError(
+                f"No contracts found at all for symbol {symbol}"
+            )
+
+        raise RuntimeError(
+            f"Multiple contracts matched for {symbol} {expiry} {strike} {opt}"
         )
-
-    # -------------------------------------------------
-    # NSE EQUITY OPTIONS
-    # -------------------------------------------------
-
-    def _resolve_nse_equity_option(
-        self,
-        symbol: str,
-        expiry: date,
-        strike: float,
-        opt: str,
-    ):
-        strike_str = self._format_equity_strike(strike)
-        year = str(expiry.year)[-2:]
-        month = expiry.strftime("%b").upper()
-
-        ts = f"{symbol}{year}{month}{strike_str}{opt}"
-
-        for inst in self.instruments:
-            if (
-                inst["exchange"] == "NFO"
-                and inst["tradingsymbol"] == ts
-            ):
-                return inst
-
-        return None
-
-    # -------------------------------------------------
-    # MCX OPTIONS
-    # -------------------------------------------------
-
-    def _resolve_mcx_option(
-        self,
-        symbol: str,
-        expiry: date,
-        strike: float,
-        opt: str,
-    ):
-        year = str(expiry.year)[-2:]
-        month = expiry.strftime("%b").upper()
-
-        ts = f"{symbol}{year}{month}{int(strike)}{opt}"
-
-        for inst in self.instruments:
-            if (
-                inst["exchange"] == "MCX"
-                and inst["tradingsymbol"] == ts
-            ):
-                return inst
-
-        return None
-
-    # -------------------------------------------------
-
-    @staticmethod
-    def _format_equity_strike(strike: float) -> str:
-        """
-        NSE equity options use literal strikes.
-        Examples:
-        252   -> "252"
-        252.5 -> "252.5"
-        """
-        if float(strike).is_integer():
-            return str(int(strike))
-        return str(strike)
-
-    # -------------------------------------------------
-
-    @staticmethod
-    def _parse_expiry(expiry_str: str) -> date:
-        expiry_str = expiry_str.strip()
-
-        if expiry_str.count("-") == 2:
-            return datetime.strptime(expiry_str, "%d-%b-%y").date()
-        else:
-            d = datetime.strptime(expiry_str, "%d-%b").date()
-            return d.replace(year=date.today().year)

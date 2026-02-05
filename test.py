@@ -11,10 +11,10 @@ def main():
 
     kite = session.client()
 
-    instruments = kite.instruments("NFO")
+    instruments = kite.instruments("MCX")
     print(f"Total NFO instruments: {len(instruments)}")
 
-    symbol = "POWERGRID"
+    symbol = "GOLDM"
 
     # Step 1: find all option contracts for symbol
     rows = [
